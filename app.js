@@ -34,6 +34,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Função para fazer o dispositivo vibrar
+    function vibrateDevice() {
+        // Verificar se a API de vibração está disponível
+        if ('vibrate' in navigator) {
+            // Vibrar por 300ms
+            navigator.vibrate(300);
+        } else {
+            console.log('Vibração não suportada neste dispositivo');
+        }
+    }
+
     // Iniciar o scanner
     async function startScanner() {
         if (!codeReader) {
@@ -56,6 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             // Adicionar som de beep
                             const beep = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU");
                             beep.play();
+                            
+                            // Fazer o dispositivo vibrar
+                            vibrateDevice();
                         }
                     }
                     if (err && !(err instanceof ZXing.NotFoundException)) {
