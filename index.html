@@ -22,6 +22,19 @@
                 <button id="stop-scanner" class="btn" disabled>Parar Scanner</button>
                 <button id="switch-camera" class="btn" disabled>Alternar Câmera</button>
                 <button id="toggle-flash" class="btn" disabled>Ligar Flash</button>
+                <button id="toggle-mode" class="btn">Modo Contínuo: ON</button>
+            </div>
+            <div class="advanced-controls">
+                <div class="control-group">
+                    <label for="contrast-slider">Contraste:</label>
+                    <input type="range" id="contrast-slider" min="1" max="3" step="0.1" value="1.5">
+                    <span id="contrast-value">1.5</span>
+                </div>
+                <div class="control-group">
+                    <label for="brightness-slider">Brilho:</label>
+                    <input type="range" id="brightness-slider" min="-50" max="50" step="5" value="0">
+                    <span id="brightness-value">0</span>
+                </div>
             </div>
         </div>
 
@@ -45,6 +58,7 @@
     </div>
 
     <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
+    <script src="barcode-validator.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

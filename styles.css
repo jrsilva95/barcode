@@ -114,6 +114,39 @@ video {
     justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.advanced-controls {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.control-group label {
+    font-size: 14px;
+    min-width: 80px;
+}
+
+.control-group input[type="range"] {
+    width: 150px;
+}
+
+.control-group span {
+    font-size: 14px;
+    min-width: 30px;
+    text-align: right;
 }
 
 .btn {
@@ -203,5 +236,32 @@ video {
     }
     100% {
         background-color: transparent;
+    }
+}
+
+.valid-code {
+    color: #27ae60;
+}
+
+.invalid-code {
+    color: #e74c3c;
+}
+
+@media (max-width: 768px) {
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .advanced-controls {
+        flex-direction: column;
+    }
+    
+    .control-group {
+        width: 100%;
+    }
+    
+    .control-group input[type="range"] {
+        flex-grow: 1;
     }
 }
