@@ -4,10 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const startButton = document.getElementById('start-scanner');
     const stopButton = document.getElementById('stop-scanner');
     const switchCameraButton = document.getElementById('switch-camera');
+    const toggleFlashButton = document.getElementById('toggle-flash');
     const barcodeList = document.getElementById('barcode-list');
     const exportButton = document.getElementById('export-csv');
     const clearAllButton = document.getElementById('clear-all');
     const totalCodesElement = document.getElementById('total-codes');
+    const scanRegionHighlight = document.getElementById('scan-region-highlight');
+    const scanStatus = document.getElementById('scan-status');
 
     // Array para armazenar os códigos lidos
     let barcodes = [];
@@ -15,16 +18,56 @@ document.addEventListener('DOMContentLoaded', () => {
     let videoInputDevices = [];
     let currentDeviceIndex = 0;
     let isScanning = false;
+    let flashOn = false;
+    let lastDetectionTime = 0;
+    let videoTrack = null;
+    let scannerHints = new Map();
+
+    // Configurar dicas para otimizar a leitura de códigos de barras de produtos
+    function setupScannerHints() {
+        // Formatos de códigos de barras comuns para produtos
+        scannerHints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13,
+            ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.UPC_A,
+            ZXing.BarcodeFormat.UPC_E,
+            ZXing.BarcodeFormat.CODE_39,
+            ZXing.BarcodeFormat.CODE_128
+        ]);
+        
+        // Tentar mais agressivamente encontrar códigos
+        scannerHints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        
+        // Otimizar para velocidade em vez de precisão
+        scannerHints.set(ZXing.DecodeHintType.PURE_BARCODE, true);
+        
+        // Otimizar para códigos de barras 1D (maioria dos produtos)
+        scannerHints.set(ZXing.DecodeHintType.ASSUME_CODE_39_CHECK_DIGIT, true);
+    }
 
     // Inicializar o leitor de código de barras
     async function initBarcodeReader() {
         try {
-            codeReader = new ZXing.BrowserMultiFormatReader();
+            setupScannerHints();
+            codeReader = new ZXing.BrowserMultiFormatReader(scannerHints);
+            
+            // Configurar para processar mais rápido
+            codeReader.timeBetweenDecodingAttempts = 100; // Reduzir tempo entre tentativas
+            
             videoInputDevices = await codeReader.listVideoInputDevices();
             
             if (videoInputDevices.length === 0) {
                 alert('Nenhuma câmera encontrada no dispositivo');
                 return false;
+            }
+            
+            // Preferir câmera traseira para leitura de códigos de barras
+            for (let i = 0; i < videoInputDevices.length; i++) {
+                const label = videoInputDevices[i].label.toLowerCase();
+                if (label.includes('back') || label.includes('traseira') || label.includes('rear')) {
+                    currentDeviceIndex = i;
+                    break;
+                }
             }
             
             // Habilitar o botão de alternar câmera se houver mais de uma câmera
@@ -42,12 +85,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Função para fazer o dispositivo vibrar
     function vibrateDevice() {
-        // Verificar se a API de vibração está disponível
         if ('vibrate' in navigator) {
-            // Vibrar por 300ms
             navigator.vibrate(300);
-        } else {
-            console.log('Vibração não suportada neste dispositivo');
+        }
+    }
+
+    // Atualizar status do scanner
+    function updateScanStatus(message) {
+        scanStatus.textContent = message;
+    }
+
+    // Controlar o flash da câmera
+    async function toggleFlash() {
+        if (!videoTrack) return;
+        
+        try {
+            if (flashOn) {
+                await videoTrack.applyConstraints({
+                    advanced: [{ torch: false }]
+                });
+                flashOn = false;
+                toggleFlashButton.textContent = 'Ligar Flash';
+            } else {
+                await videoTrack.applyConstraints({
+                    advanced: [{ torch: true }]
+                });
+                flashOn = true;
+                toggleFlashButton.textContent = 'Desligar Flash';
+            }
+        } catch (err) {
+            console.error('Erro ao controlar o flash:', err);
+            alert('Este dispositivo não suporta controle de flash');
         }
     }
 
@@ -59,17 +127,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            updateScanStatus('Iniciando câmera...');
+            scanRegionHighlight.classList.add('active');
+            
             const selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
             
-            codeReader.decodeFromVideoDevice(
-                selectedDeviceId, 
+            // Configurações avançadas para a câmera
+            const constraints = {
+                video: {
+                    deviceId: selectedDeviceId,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: "environment",
+                    focusMode: "continuous"
+                }
+            };
+            
+            // Iniciar o scanner com configurações otimizadas
+            codeReader.decodeFromConstraints(
+                constraints,
                 video, 
                 (result, err) => {
                     if (result) {
                         const barcodeValue = result.getText();
-                        // Verificar se o código já foi lido
-                        if (!barcodes.some(code => code.value === barcodeValue)) {
+                        const currentTime = new Date().getTime();
+                        
+                        // Verificar se o código já foi lido e se passou tempo suficiente desde a última leitura
+                        if (!barcodes.some(code => code.value === barcodeValue) && 
+                            (currentTime - lastDetectionTime > 1000)) {
+                            
+                            lastDetectionTime = currentTime;
                             const timestamp = new Date().toLocaleString();
+                            
+                            updateScanStatus('Código detectado!');
+                            
+                            // Destacar a região onde o código foi encontrado
+                            const points = result.getResultPoints();
+                            if (points && points.length > 0) {
+                                // Feedback visual de sucesso
+                                scanRegionHighlight.style.borderColor = '#00ff00';
+                                setTimeout(() => {
+                                    scanRegionHighlight.style.borderColor = '#ff0000';
+                                }, 500);
+                            }
+                            
                             addBarcodeToList(barcodeValue, timestamp);
                             
                             // Adicionar som de beep
@@ -78,22 +179,48 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // Fazer o dispositivo vibrar
                             vibrateDevice();
+                            
+                            // Voltar ao estado de busca após um breve intervalo
+                            setTimeout(() => {
+                                updateScanStatus('Procurando código...');
+                            }, 1000);
+                        }
+                    } else {
+                        // Atualizar status apenas ocasionalmente para não sobrecarregar a UI
+                        if (Math.random() < 0.1) {
+                            updateScanStatus('Procurando código...');
                         }
                     }
+                    
                     if (err && !(err instanceof ZXing.NotFoundException)) {
                         console.error('Erro na decodificação:', err);
                     }
                 }
             );
             
+            // Obter a track de vídeo para controle do flash
+            const stream = video.srcObject;
+            if (stream) {
+                videoTrack = stream.getVideoTracks()[0];
+                
+                // Verificar se o flash é suportado
+                if (videoTrack.getCapabilities && videoTrack.getCapabilities().torch) {
+                    toggleFlashButton.disabled = false;
+                }
+            }
+            
             isScanning = true;
             startButton.disabled = true;
             stopButton.disabled = false;
             switchCameraButton.disabled = videoInputDevices.length <= 1;
             
+            updateScanStatus('Procurando código...');
+            
         } catch (err) {
             console.error('Erro ao iniciar o scanner:', err);
             alert('Erro ao iniciar o scanner: ' + err.message);
+            updateScanStatus('Erro ao iniciar câmera');
+            scanRegionHighlight.classList.remove('active');
         }
     }
 
@@ -105,6 +232,20 @@ document.addEventListener('DOMContentLoaded', () => {
             startButton.disabled = false;
             stopButton.disabled = true;
             switchCameraButton.disabled = true;
+            toggleFlashButton.disabled = true;
+            scanRegionHighlight.classList.remove('active');
+            updateScanStatus('Aguardando...');
+            
+            // Desligar o flash se estiver ligado
+            if (flashOn && videoTrack) {
+                videoTrack.applyConstraints({
+                    advanced: [{ torch: false }]
+                }).catch(() => {});
+                flashOn = false;
+                toggleFlashButton.textContent = 'Ligar Flash';
+            }
+            
+            videoTrack = null;
         }
     }
 
@@ -115,22 +256,62 @@ document.addEventListener('DOMContentLoaded', () => {
         // Parar o scanner atual
         codeReader.reset();
         
+        // Desligar o flash se estiver ligado
+        if (flashOn && videoTrack) {
+            videoTrack.applyConstraints({
+                advanced: [{ torch: false }]
+            }).catch(() => {});
+            flashOn = false;
+            toggleFlashButton.textContent = 'Ligar Flash';
+        }
+        
         // Alternar para a próxima câmera
         currentDeviceIndex = (currentDeviceIndex + 1) % videoInputDevices.length;
+        
+        updateScanStatus('Alternando câmera...');
         
         // Iniciar o scanner com a nova câmera
         try {
             const selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
             
-            codeReader.decodeFromVideoDevice(
-                selectedDeviceId, 
+            // Configurações avançadas para a câmera
+            const constraints = {
+                video: {
+                    deviceId: selectedDeviceId,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: "environment",
+                    focusMode: "continuous"
+                }
+            };
+            
+            codeReader.decodeFromConstraints(
+                constraints,
                 video, 
                 (result, err) => {
                     if (result) {
                         const barcodeValue = result.getText();
-                        // Verificar se o código já foi lido
-                        if (!barcodes.some(code => code.value === barcodeValue)) {
+                        const currentTime = new Date().getTime();
+                        
+                        // Verificar se o código já foi lido e se passou tempo suficiente desde a última leitura
+                        if (!barcodes.some(code => code.value === barcodeValue) && 
+                            (currentTime - lastDetectionTime > 1000)) {
+                            
+                            lastDetectionTime = currentTime;
                             const timestamp = new Date().toLocaleString();
+                            
+                            updateScanStatus('Código detectado!');
+                            
+                            // Destacar a região onde o código foi encontrado
+                            const points = result.getResultPoints();
+                            if (points && points.length > 0) {
+                                // Feedback visual de sucesso
+                                scanRegionHighlight.style.borderColor = '#00ff00';
+                                setTimeout(() => {
+                                    scanRegionHighlight.style.borderColor = '#ff0000';
+                                }, 500);
+                            }
+                            
                             addBarcodeToList(barcodeValue, timestamp);
                             
                             // Adicionar som de beep
@@ -139,18 +320,43 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // Fazer o dispositivo vibrar
                             vibrateDevice();
+                            
+                            // Voltar ao estado de busca após um breve intervalo
+                            setTimeout(() => {
+                                updateScanStatus('Procurando código...');
+                            }, 1000);
+                        }
+                    } else {
+                        // Atualizar status apenas ocasionalmente para não sobrecarregar a UI
+                        if (Math.random() < 0.1) {
+                            updateScanStatus('Procurando código...');
                         }
                     }
+                    
                     if (err && !(err instanceof ZXing.NotFoundException)) {
                         console.error('Erro na decodificação:', err);
                     }
                 }
             );
             
+            // Obter a track de vídeo para controle do flash
+            const stream = video.srcObject;
+            if (stream) {
+                videoTrack = stream.getVideoTracks()[0];
+                
+                // Verificar se o flash é suportado
+                if (videoTrack.getCapabilities && videoTrack.getCapabilities().torch) {
+                    toggleFlashButton.disabled = false;
+                } else {
+                    toggleFlashButton.disabled = true;
+                }
+            }
+            
             // Mostrar qual câmera está sendo usada
             const cameraLabel = videoInputDevices[currentDeviceIndex].label || 
                                `Câmera ${currentDeviceIndex + 1}`;
             console.log(`Alternado para: ${cameraLabel}`);
+            updateScanStatus('Procurando código...');
             
         } catch (err) {
             console.error('Erro ao alternar câmera:', err);
@@ -170,14 +376,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Adicionar à lista visual
         const listItem = document.createElement('div');
-        listItem.className = 'code-item';
+        listItem.className = 'code-item new';
         listItem.innerHTML = `
             <span>${value}</span>
             <span>${timestamp}</span>
             <button class="delete-btn" data-code="${value}">Remover</button>
         `;
         
-        barcodeList.appendChild(listItem);
+        barcodeList.prepend(listItem); // Adicionar no topo da lista
+        
+        // Remover classe 'new' após a animação
+        setTimeout(() => {
+            listItem.classList.remove('new');
+        }, 1500);
         
         // Atualizar contagem
         updateTotalCount();
@@ -246,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
         link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `codigos_barras_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute("download", `codigos_produtos_${new Date().toISOString().slice(0,10)}.csv`);
         document.body.appendChild(link);
         
         // Trigger download
@@ -258,6 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
     startButton.addEventListener('click', startScanner);
     stopButton.addEventListener('click', stopScanner);
     switchCameraButton.addEventListener('click', switchCamera);
+    toggleFlashButton.addEventListener('click', toggleFlash);
     exportButton.addEventListener('click', exportToCSV);
     clearAllButton.addEventListener('click', clearAllBarcodes);
     

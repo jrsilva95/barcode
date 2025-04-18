@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Códigos de Barras</title>
+    <title>Leitor de Códigos de Barras de Produtos</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Leitor de Códigos de Barras</h1>
+        <h1>Leitor de Códigos de Produtos</h1>
         
         <div class="scanner-container">
             <div class="video-container">
@@ -16,11 +16,14 @@
                 <div class="scanner-overlay">
                     <div class="scanner-line"></div>
                 </div>
+                <div id="scan-region-highlight" class="scan-region-highlight"></div>
+                <div id="scan-status" class="scan-status">Aguardando...</div>
             </div>
             <div class="controls">
                 <button id="start-scanner" class="btn">Iniciar Scanner</button>
                 <button id="stop-scanner" class="btn" disabled>Parar Scanner</button>
                 <button id="switch-camera" class="btn" disabled>Alternar Câmera</button>
+                <button id="toggle-flash" class="btn" disabled>Ligar Flash</button>
             </div>
         </div>
 

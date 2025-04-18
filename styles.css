@@ -72,6 +72,39 @@ video {
     animation: scan 2s linear infinite;
 }
 
+.scan-region-highlight {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 100px;
+    transform: translate(-50%, -50%);
+    border: 2px solid #ff0000;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.3);
+    z-index: 3;
+    pointer-events: none;
+    display: none;
+}
+
+.scan-region-highlight.active {
+    display: block;
+    animation: pulse 1.5s infinite;
+}
+
+.scan-status {
+    position: absolute;
+    bottom: 10px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px;
+    font-size: 14px;
+    z-index: 4;
+}
+
 @keyframes scan {
     0% {
         top: 0;
@@ -81,6 +114,18 @@ video {
     }
     100% {
         top: 0;
+    }
+}
+
+@keyframes pulse {
+    0% {
+        border-color: rgba(255, 0, 0, 0.5);
+    }
+    50% {
+        border-color: rgba(255, 0, 0, 1);
+    }
+    100% {
+        border-color: rgba(255, 0, 0, 0.5);
     }
 }
 
@@ -166,4 +211,17 @@ video {
 
 #total-codes {
     font-weight: bold;
+}
+
+.code-item.new {
+    animation: highlight 1.5s ease-in-out;
+}
+
+@keyframes highlight {
+    0% {
+        background-color: rgba(46, 204, 113, 0.3);
+    }
+    100% {
+        background-color: transparent;
+    }
 }
