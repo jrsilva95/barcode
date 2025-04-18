@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('video');
     const startButton = document.getElementById('start-scanner');
     const stopButton = document.getElementById('stop-scanner');
+    const switchCameraButton = document.getElementById('switch-camera');
     const barcodeList = document.getElementById('barcode-list');
     const exportButton = document.getElementById('export-csv');
     const clearAllButton = document.getElementById('clear-all');
@@ -11,21 +12,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Array para armazenar os códigos lidos
     let barcodes = [];
     let codeReader = null;
-    let selectedDeviceId = null;
+    let videoInputDevices = [];
+    let currentDeviceIndex = 0;
+    let isScanning = false;
 
     // Inicializar o leitor de código de barras
     async function initBarcodeReader() {
         try {
             codeReader = new ZXing.BrowserMultiFormatReader();
-            const videoInputDevices = await codeReader.listVideoInputDevices();
+            videoInputDevices = await codeReader.listVideoInputDevices();
             
             if (videoInputDevices.length === 0) {
                 alert('Nenhuma câmera encontrada no dispositivo');
                 return false;
             }
             
-            // Use a primeira câmera disponível
-            selectedDeviceId = videoInputDevices[0].deviceId;
+            // Habilitar o botão de alternar câmera se houver mais de uma câmera
+            if (videoInputDevices.length > 1) {
+                switchCameraButton.disabled = false;
+            }
+            
             return true;
         } catch (err) {
             console.error('Erro ao inicializar o leitor:', err);
@@ -53,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            const selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
+            
             codeReader.decodeFromVideoDevice(
                 selectedDeviceId, 
                 video, 
@@ -78,8 +86,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             );
             
+            isScanning = true;
             startButton.disabled = true;
             stopButton.disabled = false;
+            switchCameraButton.disabled = videoInputDevices.length <= 1;
             
         } catch (err) {
             console.error('Erro ao iniciar o scanner:', err);
@@ -91,8 +101,64 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopScanner() {
         if (codeReader) {
             codeReader.reset();
+            isScanning = false;
             startButton.disabled = false;
             stopButton.disabled = true;
+            switchCameraButton.disabled = true;
+        }
+    }
+
+    // Alternar entre câmeras
+    async function switchCamera() {
+        if (!isScanning || videoInputDevices.length <= 1) return;
+        
+        // Parar o scanner atual
+        codeReader.reset();
+        
+        // Alternar para a próxima câmera
+        currentDeviceIndex = (currentDeviceIndex + 1) % videoInputDevices.length;
+        
+        // Iniciar o scanner com a nova câmera
+        try {
+            const selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
+            
+            codeReader.decodeFromVideoDevice(
+                selectedDeviceId, 
+                video, 
+                (result, err) => {
+                    if (result) {
+                        const barcodeValue = result.getText();
+                        // Verificar se o código já foi lido
+                        if (!barcodes.some(code => code.value === barcodeValue)) {
+                            const timestamp = new Date().toLocaleString();
+                            addBarcodeToList(barcodeValue, timestamp);
+                            
+                            // Adicionar som de beep
+                            const beep = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU");
+                            beep.play();
+                            
+                            // Fazer o dispositivo vibrar
+                            vibrateDevice();
+                        }
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Erro na decodificação:', err);
+                    }
+                }
+            );
+            
+            // Mostrar qual câmera está sendo usada
+            const cameraLabel = videoInputDevices[currentDeviceIndex].label || 
+                               `Câmera ${currentDeviceIndex + 1}`;
+            console.log(`Alternado para: ${cameraLabel}`);
+            
+        } catch (err) {
+            console.error('Erro ao alternar câmera:', err);
+            alert('Erro ao alternar câmera: ' + err.message);
+            
+            // Tentar voltar para a câmera anterior
+            currentDeviceIndex = (currentDeviceIndex - 1 + videoInputDevices.length) % videoInputDevices.length;
+            startScanner();
         }
     }
 
@@ -191,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners
     startButton.addEventListener('click', startScanner);
     stopButton.addEventListener('click', stopScanner);
+    switchCameraButton.addEventListener('click', switchCamera);
     exportButton.addEventListener('click', exportToCSV);
     clearAllButton.addEventListener('click', clearAllBarcodes);
     
