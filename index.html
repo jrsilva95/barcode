@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Códigos de Barras</title>
+    <title>Leitor de Códigos de Barras de Produtos</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,7 +13,9 @@
         <div class="scanner-container">
             <div class="video-container">
                 <video id="video" playsinline></video>
-                <div class="scanner-overlay"></div>
+                <div class="scanner-overlay">
+                    <div class="scanner-line"></div>
+                </div>
                 <div id="scan-region-highlight" class="scan-region-highlight"></div>
                 <div id="scan-status" class="scan-status">Aguardando...</div>
             </div>
@@ -22,19 +24,6 @@
                 <button id="stop-scanner" class="btn" disabled>Parar Scanner</button>
                 <button id="switch-camera" class="btn" disabled>Alternar Câmera</button>
                 <button id="toggle-flash" class="btn" disabled>Ligar Flash</button>
-                <button id="toggle-mode" class="btn">Modo Contínuo: ON</button>
-            </div>
-            <div class="advanced-controls">
-                <div class="control-group">
-                    <label for="contrast-slider">Contraste:</label>
-                    <input type="range" id="contrast-slider" min="1" max="3" step="0.1" value="1.5">
-                    <span id="contrast-value">1.5</span>
-                </div>
-                <div class="control-group">
-                    <label for="brightness-slider">Brilho:</label>
-                    <input type="range" id="brightness-slider" min="-50" max="50" step="5" value="0">
-                    <span id="brightness-value">0</span>
-                </div>
             </div>
         </div>
 
@@ -57,8 +46,7 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
-    <script src="barcode-validator.js"></script>
+    <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
     <script src="app.js"></script>
 </body>
 </html>
