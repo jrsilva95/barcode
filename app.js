@@ -53,8 +53,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 readers: [
                     "ean_reader",
                     "ean_8_reader",
-                    "upc_reader",
-                    "upc_e_reader"
                 ],
                 multiple: false, // Desativar detecção múltipla
                 debug: {
@@ -213,22 +211,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Adicionar código à tabela
     function addToTable(code, type, confidence, timestamp) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${code}</td>
-            <td>${type}</td>
-            <td>${confidence}%</td>
-            <td>${timestamp}</td>
-            <td><button class="delete-btn" data-code="${code}">Remover</button></td>
-        `;
-        
-        // Adicionar evento ao botão de remover
-        tr.querySelector('.delete-btn').addEventListener('click', function() {
-            const codeToRemove = this.getAttribute('data-code');
-            removeCode(codeToRemove, tr);
-        });
-        
-        resultsBody.appendChild(tr);
+
+        if(type.startsWith("ean")){
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${code}</td>
+                <td>${type}</td>
+                <td>${confidence}%</td>
+                <td>${timestamp}</td>
+                <td><button class="delete-btn" data-code="${code}">Remover</button></td>
+            `;
+            
+            // Adicionar evento ao botão de remover
+            tr.querySelector('.delete-btn').addEventListener('click', function() {
+                const codeToRemove = this.getAttribute('data-code');
+                removeCode(codeToRemove, tr);
+            });
+            
+            resultsBody.appendChild(tr);
+            
+        }
+
     }
     
     // Remover código da tabela e do array
