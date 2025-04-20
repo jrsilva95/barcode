@@ -4,9 +4,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const stopButton = document.getElementById('stop-button');
     const exportButton = document.getElementById('export-button');
     const resultsBody = document.getElementById('results-body');
+    const confidenceThreshold = document.getElementById('confidence-threshold');
+    const confidenceValue = document.getElementById('confidence-value');
     
     // Array para armazenar os códigos escaneados
     let scannedCodes = [];
+    
+    // Configurações
+    let currentConfidenceThreshold = 70; // Valor padrão
+    
+    // Atualizar o valor do limiar de confiança
+    confidenceThreshold.addEventListener('input', function() {
+        currentConfidenceThreshold = parseInt(this.value);
+        confidenceValue.textContent = currentConfidenceThreshold;
+    });
+    
+    // Buffer para verificação de códigos consecutivos
+    let lastResults = [];
+    const REQUIRED_CONSECUTIVE_READS = 3; // Número de leituras consecutivas iguais necessárias
     
     // Configuração do Quagga
     function initQuagga() {
@@ -16,28 +31,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 type: "LiveStream",
                 target: document.querySelector('#interactive'),
                 constraints: {
-                    width: 640,
-                    height: 480,
+                    width: { min: 640 },
+                    height: { min: 480 },
+                    aspectRatio: { min: 1, max: 2 },
                     facingMode: "environment" // Usar câmera traseira em dispositivos móveis
                 },
+                area: { // Definir uma área de digitalização menor para melhorar a precisão
+                    top: "40%",
+                    right: "20%",
+                    left: "20%",
+                    bottom: "40%"
+                }
             },
             locator: {
                 patchSize: "medium",
                 halfSample: true
             },
             numOfWorkers: navigator.hardwareConcurrency || 4,
+            frequency: 10, // Aumentar a frequência de digitalização
             decoder: {
                 readers: [
-                    "code_128_reader",
                     "ean_reader",
                     "ean_8_reader",
-                    "code_39_reader",
-                    "code_39_vin_reader",
-                    "codabar_reader",
                     "upc_reader",
-                    "upc_e_reader",
-                    "i2of5_reader"
+                    "upc_e_reader"
                 ],
+                multiple: false, // Desativar detecção múltipla
                 debug: {
                     showCanvas: true,
                     showPatches: true,
@@ -53,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             },
+            locate: true
         }, function(err) {
             if (err) {
                 console.error(err);
@@ -75,6 +95,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
+        // Evento para processar resultado da detecção
+        Quagga.onProcessed(function(result) {
+            const drawingCtx = Quagga.canvas.ctx.overlay;
+            const drawingCanvas = Quagga.canvas.dom.overlay;
+
+            if (result) {
+                if (result.boxes) {
+                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                    result.boxes.filter(function(box) {
+                        return box !== result.box;
+                    }).forEach(function(box) {
+                        Quagga.ImageDebug.drawPath(box, { x: 0, y: 1 }, drawingCtx, { color: "green", lineWidth: 2 });
+                    });
+                }
+
+                if (result.box) {
+                    Quagga.ImageDebug.drawPath(result.box, { x: 0, y: 1 }, drawingCtx, { color: "#00F", lineWidth: 2 });
+                }
+
+                if (result.codeResult && result.codeResult.code) {
+                    Quagga.ImageDebug.drawPath(result.line, { x: 'x', y: 'y' }, drawingCtx, { color: 'red', lineWidth: 3 });
+                }
+            }
+        });
+        
         // Evento para detecção de código de barras
         Quagga.onDetected(handleBarcodeDetected);
     }
@@ -83,27 +128,82 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleBarcodeDetected(result) {
         const code = result.codeResult.code;
         const codeType = result.codeResult.format;
+        const confidence = Math.round(result.codeResult.confidence * 100);
         
-        // Verificar se o código já foi escaneado
-        if (!isDuplicate(code)) {
-            const timestamp = new Date().toLocaleString();
-            
-            // Adicionar ao array de códigos
-            scannedCodes.push({
-                code: code,
-                type: codeType,
-                timestamp: timestamp
-            });
-            
-            // Adicionar à tabela
-            addToTable(code, codeType, timestamp);
-            
-            // Habilitar botão de exportação
-            exportButton.disabled = false;
-            
-            // Feedback sonoro (opcional)
-            beep();
+        // Verificar se a confiança está acima do limiar
+        if (confidence < currentConfidenceThreshold) {
+            console.log(`Código ${code} rejeitado: confiança ${confidence}% abaixo do limiar ${currentConfidenceThreshold}%`);
+            return;
         }
+        
+        // Adicionar ao buffer para verificação de leituras consecutivas
+        lastResults.push(code);
+        
+        // Manter apenas as últimas N leituras
+        if (lastResults.length > REQUIRED_CONSECUTIVE_READS) {
+            lastResults.shift();
+        }
+        
+        // Verificar se temos leituras consecutivas iguais
+        if (lastResults.length === REQUIRED_CONSECUTIVE_READS && areAllSame(lastResults)) {
+            // Verificar se o código já foi escaneado
+            if (!isDuplicate(code)) {
+                const timestamp = new Date().toLocaleString();
+                
+                // Verificar se o código EAN é válido
+                if (isValidEAN(code)) {
+                    // Adicionar ao array de códigos
+                    scannedCodes.push({
+                        code: code,
+                        type: codeType,
+                        confidence: confidence,
+                        timestamp: timestamp
+                    });
+                    
+                    // Adicionar à tabela
+                    addToTable(code, codeType, confidence, timestamp);
+                    
+                    // Habilitar botão de exportação
+                    exportButton.disabled = false;
+                    
+                    // Feedback sonoro
+                    beep();
+                    
+                    // Limpar o buffer após um código válido
+                    lastResults = [];
+                } else {
+                    console.log(`Código ${code} rejeitado: não é um EAN válido`);
+                }
+            }
+        }
+    }
+    
+    // Verificar se todos os elementos do array são iguais
+    function areAllSame(array) {
+        return array.every(item => item === array[0]);
+    }
+    
+    // Verificar se o código EAN é válido usando o algoritmo de verificação
+    function isValidEAN(code) {
+        // Verificar se é um número e tem o comprimento correto (EAN-13, EAN-8, UPC-A, UPC-E)
+        if (!/^\d+$/.test(code)) return false;
+        
+        const length = code.length;
+        if (![8, 12, 13, 14].includes(length)) return false;
+        
+        // Implementar verificação de dígito de controle para EAN/UPC
+        let sum = 0;
+        const digits = code.split('').map(Number);
+        const checkDigit = digits.pop(); // Remover o último dígito (dígito de verificação)
+        
+        // Algoritmo para calcular o dígito de verificação
+        for (let i = 0; i < digits.length; i++) {
+            sum += digits[i] * (i % 2 === 0 ? 1 : 3);
+        }
+        
+        const calculatedCheckDigit = (10 - (sum % 10)) % 10;
+        
+        return calculatedCheckDigit === checkDigit;
     }
     
     // Verificar se o código já foi escaneado
@@ -112,11 +212,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Adicionar código à tabela
-    function addToTable(code, type, timestamp) {
+    function addToTable(code, type, confidence, timestamp) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${code}</td>
             <td>${type}</td>
+            <td>${confidence}%</td>
             <td>${timestamp}</td>
             <td><button class="delete-btn" data-code="${code}">Remover</button></td>
         `;
@@ -169,11 +270,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Cabeçalho do CSV
-        let csvContent = "Código,Tipo,Data/Hora\n";
+        let csvContent = "Código,Tipo,Confiança,Data/Hora\n";
         
         // Adicionar cada código ao CSV
         scannedCodes.forEach(item => {
-            csvContent += `"${item.code}","${item.type}","${item.timestamp}"\n`;
+            csvContent += `"${item.code}","${item.type}","${item.confidence}%","${item.timestamp}"\n`;
         });
         
         // Criar blob e link para download
@@ -182,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const link = document.createElement('a');
         
         link.setAttribute('href', url);
-        link.setAttribute('download', `codigos_barras_${new Date().toISOString().slice(0,10)}.csv`);
+        link.setAttribute('download', `codigos_ean_${new Date().toISOString().slice(0,10)}.csv`);
         link.style.visibility = 'hidden';
         
         document.body.appendChild(link);
