@@ -3,50 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Códigos de Barras de Produtos</title>
+    <title>Leitor de Código de Barras</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Leitor de Códigos de Produtos</h1>
+        <h1>Leitor de Código de Barras</h1>
         
-        <div class="scanner-container">
-            <div class="video-container">
-                <video id="video" playsinline></video>
-                <div class="scanner-overlay">
-                    <div class="scanner-line"></div>
-                </div>
-                <div id="scan-region-highlight" class="scan-region-highlight"></div>
-                <div id="scan-status" class="scan-status">Aguardando...</div>
-            </div>
-            <div class="controls">
-                <button id="start-scanner" class="btn">Iniciar Scanner</button>
-                <button id="stop-scanner" class="btn" disabled>Parar Scanner</button>
-                <button id="switch-camera" class="btn" disabled>Alternar Câmera</button>
-                <button id="toggle-flash" class="btn" disabled>Ligar Flash</button>
-            </div>
+        <div class="controls">
+            <button id="start-button">Iniciar Scanner</button>
+            <button id="stop-button" disabled>Parar Scanner</button>
+            <button id="export-button" disabled>Exportar CSV</button>
         </div>
-
+        
+        <div id="scanner-container">
+            <div id="interactive" class="viewport"></div>
+        </div>
+        
         <div class="results-container">
-            <h2>Códigos Lidos</h2>
-            <div class="code-list-header">
-                <span>Código</span>
-                <span>Data/Hora</span>
-                <span>Ações</span>
-            </div>
-            <div id="barcode-list" class="code-list">
-                <!-- Códigos serão adicionados aqui -->
-            </div>
-            
-            <div class="export-container">
-                <p id="total-codes">Total: 0 códigos</p>
-                <button id="export-csv" class="btn" disabled>Exportar CSV</button>
-                <button id="clear-all" class="btn" disabled>Limpar Todos</button>
+            <h2>Códigos Escaneados</h2>
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Tipo</th>
+                            <th>Data/Hora</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/@zxing/library@0.21.3"></script>
+    <!-- Importar QuaggaJS da CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
