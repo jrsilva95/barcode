@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (result) {
 
-                console.log(result);
+                //console.log(result);
 
                 if (result.boxes) {
                     drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
@@ -131,6 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const codeType = result.codeResult.format;
         const confidence = Math.round(result.codeResult.confidence * 100);
         
+        console.log(result);
+
         // Verificar se a confiança está acima do limiar
         if (confidence < currentConfidenceThreshold) {
             console.log(`Código ${code} rejeitado: confiança ${confidence}% abaixo do limiar ${currentConfidenceThreshold}%`);
