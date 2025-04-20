@@ -51,8 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
             frequency: 10, // Aumentar a frequência de digitalização
             decoder: {
                 readers: [
-                    "ean_reader",
-                    "ean_8_reader",
+                    "code_128_reader",
                 ],
                 multiple: false, // Desativar detecção múltipla
                 debug: {
