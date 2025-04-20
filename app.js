@@ -99,6 +99,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const drawingCanvas = Quagga.canvas.dom.overlay;
 
             if (result) {
+
+                console.log(result);
+
                 if (result.boxes) {
                     drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
                     result.boxes.filter(function(box) {
