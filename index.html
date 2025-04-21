@@ -65,6 +65,24 @@
         .status-inactive {
             background-color: #ff4136;
         }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #ff4136;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .notification.show {
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -118,6 +136,9 @@
 
 </main>
 
+<!-- Elemento de notificação -->
+<div id="notification" class="notification"></div>
+
 <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 <script type="text/javascript">
     window.addEventListener('load', function () {
@@ -126,6 +147,7 @@
         const codeReader = new ZXing.BrowserMultiFormatReader();
         const scannedCodes = [];
         let isScanning = false;
+        let lastScannedCode = null;
         
         // Elementos DOM
         const video = document.getElementById('video');
@@ -137,6 +159,7 @@
         const scanCount = document.getElementById('scanCount');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
+        const notification = document.getElementById('notification');
         
         console.log('ZXing code reader inicializado');
         
@@ -183,15 +206,12 @@
             codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
                 if (result) {
                     console.log('Código lido:', result.text);
-                    const timestamp = new Date().toLocaleString();
                     
-                    // Verificar se o código já foi escaneado recentemente para evitar duplicatas
-                    const isDuplicate = scannedCodes.some(code => 
-                        code.text === result.text && 
-                        (new Date() - new Date(code.timestamp)) < 5000 // 5 segundos
-                    );
+                    // Verificar se o código já existe na lista
+                    const codeExists = scannedCodes.some(code => code.text === result.text);
                     
-                    if (!isDuplicate) {
+                    if (!codeExists) {
+                        const timestamp = new Date().toLocaleString();
                         const scannedCode = {
                             text: result.text,
                             format: result.format,
@@ -203,6 +223,13 @@
                         
                         // Feedback sonoro (beep)
                         playBeepSound();
+                        
+                        // Atualizar último código escaneado
+                        lastScannedCode = result.text;
+                    } else if (lastScannedCode !== result.text) {
+                        // Mostrar notificação de código duplicado
+                        showNotification(`Código "${result.text}" já foi escaneado anteriormente.`);
+                        lastScannedCode = result.text;
                     }
                 }
                 
@@ -321,6 +348,16 @@
             setTimeout(() => {
                 oscillator.stop();
             }, 100);
+        }
+        
+        // Função para mostrar notificação
+        function showNotification(message) {
+            notification.textContent = message;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
         }
         
         // Configurar eventos dos botões
