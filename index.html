@@ -1,57 +1,356 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Código de Barras EAN</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <h1>Leitor de Código de Barras EAN</h1>
-        
-        <div class="controls">
-            <button id="start-button">Iniciar Scanner</button>
-            <button id="stop-button" disabled>Parar Scanner</button>
-            <button id="export-button" disabled>Exportar CSV</button>
-        </div>
-        
-        <div id="scanner-container">
-            <div id="interactive" class="viewport"></div>
-            <div id="scanner-overlay">
-                <div class="scan-region-highlight"></div>
-                <div class="scan-region-indicator"></div>
-            </div>
-        </div>
-        
-        <div class="config-panel">
-            <div class="form-group">
-                <label for="confidence-threshold">Limiar de Confiança: <span id="confidence-value">70</span>%</label>
-                <input type="range" id="confidence-threshold" min="0" max="100" value="70">
-            </div>
-        </div>
-        
-        <div class="results-container">
-            <h2>Códigos Escaneados</h2>
-            <div class="table-container">
-                <table id="results-table">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Tipo</th>
-                            <th>Confiança</th>
-                            <th>Data/Hora</th>
-                            <th>Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody id="results-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+<!doctype html>
+<html lang="pt-br">
 
-    <!-- Importar QuaggaJS da CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
-    <script src="app.js"></script>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="ZXing for JS">
+
+    <title>Leitor de Códigos de Barras com Exportação CSV</title>
+
+    <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+          href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+          href="https://unpkg.com/normalize.css@8.0.0/normalize.css">
+    <link rel="stylesheet" rel="preload" as="style" onload="this.rel='stylesheet';this.onload=null"
+          href="https://unpkg.com/milligram@1.3.0/dist/milligram.min.css">
+    
+    <style>
+        .scan-history {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #e1e1e1;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .scan-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .scan-item:last-child {
+            border-bottom: none;
+        }
+        
+        .delete-btn {
+            color: #ff4136;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0 8px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-active {
+            background-color: #2ecc40;
+        }
+        
+        .status-inactive {
+            background-color: #ff4136;
+        }
+    </style>
+</head>
+
+<body>
+
+<main class="wrapper" style="padding-top:2em">
+
+    <section class="container" id="demo-content">
+        <h1 class="title">Leitor de Códigos de Barras com Exportação CSV</h1>
+
+        <p>
+            Esta aplicação permite escanear códigos de barras 1D/2D usando a câmera do dispositivo e exportar os resultados em formato CSV.
+        </p>
+
+        <div class="controls">
+            <a class="button" id="startButton">Iniciar Leitura</a>
+            <a class="button" id="stopButton">Parar Leitura</a>
+            <a class="button button-outline" id="exportButton">Exportar CSV</a>
+            <a class="button button-clear" id="clearButton">Limpar Lista</a>
+        </div>
+
+        <div>
+            <p>
+                <span class="status-indicator status-inactive" id="statusIndicator"></span>
+                <span id="statusText">Leitor inativo</span>
+            </p>
+            <video id="video" width="300" height="200" style="border: 1px solid gray"></video>
+        </div>
+
+        <div id="sourceSelectPanel" style="display:none; margin-top: 20px;">
+            <label for="sourceSelect">Selecionar câmera:</label>
+            <select id="sourceSelect" style="max-width:400px">
+            </select>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h3>Códigos Escaneados (<span id="scanCount">0</span>)</h3>
+            <div class="scan-history" id="scanHistory">
+                <!-- Os itens escaneados serão adicionados aqui -->
+            </div>
+        </div>
+
+    </section>
+
+    <footer class="footer">
+        <section class="container">
+            <p>Aplicação baseada na biblioteca ZXing TypeScript. Licenciada sob <a 
+                                                            href="https://github.com/zxing-js/library#license" title="MIT">MIT</a>.</p>
+        </section>
+    </footer>
+
+</main>
+
+<script type="text/javascript" src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+<script type="text/javascript">
+    window.addEventListener('load', function () {
+        // Inicialização de variáveis
+        let selectedDeviceId;
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        const scannedCodes = [];
+        let isScanning = false;
+        
+        // Elementos DOM
+        const video = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const exportButton = document.getElementById('exportButton');
+        const clearButton = document.getElementById('clearButton');
+        const scanHistory = document.getElementById('scanHistory');
+        const scanCount = document.getElementById('scanCount');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        
+        console.log('ZXing code reader inicializado');
+        
+        // Listar dispositivos de vídeo disponíveis
+        codeReader.listVideoInputDevices()
+            .then((videoInputDevices) => {
+                const sourceSelect = document.getElementById('sourceSelect');
+                
+                if (videoInputDevices.length === 0) {
+                    console.error('Nenhuma câmera encontrada');
+                    alert('Nenhuma câmera foi detectada no dispositivo.');
+                    return;
+                }
+                
+                selectedDeviceId = videoInputDevices[0].deviceId;
+                
+                if (videoInputDevices.length >= 1) {
+                    videoInputDevices.forEach((element) => {
+                        const sourceOption = document.createElement('option');
+                        sourceOption.text = element.label || `Câmera ${sourceSelect.length + 1}`;
+                        sourceOption.value = element.deviceId;
+                        sourceSelect.appendChild(sourceOption);
+                    });
+
+                    sourceSelect.onchange = () => {
+                        selectedDeviceId = sourceSelect.value;
+                        if (isScanning) {
+                            stopScanning();
+                            startScanning();
+                        }
+                    };
+
+                    const sourceSelectPanel = document.getElementById('sourceSelectPanel');
+                    sourceSelectPanel.style.display = 'block';
+                }
+            })
+            .catch((err) => {
+                console.error('Erro ao listar dispositivos de vídeo:', err);
+                alert('Erro ao acessar câmeras: ' + err);
+            });
+        
+        // Função para iniciar o escaneamento
+        function startScanning() {
+            codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                if (result) {
+                    console.log('Código lido:', result.text);
+                    const timestamp = new Date().toLocaleString();
+                    
+                    // Verificar se o código já foi escaneado recentemente para evitar duplicatas
+                    const isDuplicate = scannedCodes.some(code => 
+                        code.text === result.text && 
+                        (new Date() - new Date(code.timestamp)) < 5000 // 5 segundos
+                    );
+                    
+                    if (!isDuplicate) {
+                        const scannedCode = {
+                            text: result.text,
+                            format: result.format,
+                            timestamp: timestamp
+                        };
+                        
+                        scannedCodes.unshift(scannedCode); // Adicionar no início da lista
+                        updateScanHistory();
+                        
+                        // Feedback sonoro (beep)
+                        playBeepSound();
+                    }
+                }
+                
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error('Erro de leitura:', err);
+                }
+            });
+            
+            isScanning = true;
+            updateStatus(true);
+            console.log(`Iniciada leitura contínua da câmera com ID ${selectedDeviceId}`);
+        }
+        
+        // Função para parar o escaneamento
+        function stopScanning() {
+            codeReader.reset();
+            isScanning = false;
+            updateStatus(false);
+            console.log('Leitura interrompida.');
+        }
+        
+        // Função para atualizar a lista de códigos escaneados
+        function updateScanHistory() {
+            scanHistory.innerHTML = '';
+            scanCount.textContent = scannedCodes.length;
+            
+            scannedCodes.forEach((code, index) => {
+                const scanItem = document.createElement('div');
+                scanItem.className = 'scan-item';
+                
+                scanItem.innerHTML = `
+                    <div>
+                        <strong>${code.text}</strong>
+                        <div><small>Formato: ${code.format || 'Desconhecido'} | ${code.timestamp}</small></div>
+                    </div>
+                    <button class="delete-btn" data-index="${index}">✕</button>
+                `;
+                
+                scanHistory.appendChild(scanItem);
+            });
+            
+            // Adicionar eventos para os botões de exclusão
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const index = parseInt(this.getAttribute('data-index'));
+                    scannedCodes.splice(index, 1);
+                    updateScanHistory();
+                });
+            });
+        }
+        
+        // Função para exportar os códigos como CSV
+        function exportCSV() {
+            if (scannedCodes.length === 0) {
+                alert('Nenhum código escaneado para exportar.');
+                return;
+            }
+            
+            // Criar cabeçalho do CSV
+            let csvContent = 'Código,Formato,Data e Hora\n';
+            
+            // Adicionar dados
+            scannedCodes.forEach(code => {
+                // Escapar aspas nos valores de texto
+                const escapedText = code.text.replace(/"/g, '""');
+                csvContent += `"${escapedText}","${code.format || 'Desconhecido'}","${code.timestamp}"\n`;
+            });
+            
+            // Criar blob e link para download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            // Configurar link de download
+            link.setAttribute('href', url);
+            link.setAttribute('download', `codigos_escaneados_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            
+            // Adicionar à página, clicar e remover
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Função para atualizar o indicador de status
+        function updateStatus(active) {
+            if (active) {
+                statusIndicator.classList.remove('status-inactive');
+                statusIndicator.classList.add('status-active');
+                statusText.textContent = 'Leitor ativo';
+                startButton.disabled = true;
+                stopButton.disabled = false;
+            } else {
+                statusIndicator.classList.remove('status-active');
+                statusIndicator.classList.add('status-inactive');
+                statusText.textContent = 'Leitor inativo';
+                startButton.disabled = false;
+                stopButton.disabled = true;
+            }
+        }
+        
+        // Função para reproduzir som de beep
+        function playBeepSound() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 1000;
+            gainNode.gain.value = 0.1;
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.start();
+            setTimeout(() => {
+                oscillator.stop();
+            }, 100);
+        }
+        
+        // Configurar eventos dos botões
+        startButton.addEventListener('click', () => {
+            if (!isScanning) {
+                startScanning();
+            }
+        });
+        
+        stopButton.addEventListener('click', () => {
+            if (isScanning) {
+                stopScanning();
+            }
+        });
+        
+        exportButton.addEventListener('click', exportCSV);
+        
+        clearButton.addEventListener('click', () => {
+            if (confirm('Tem certeza que deseja limpar todos os códigos escaneados?')) {
+                scannedCodes.length = 0;
+                updateScanHistory();
+            }
+        });
+        
+        // Configuração inicial
+        updateStatus(false);
+        stopButton.disabled = true;
+    });
+</script>
+
 </body>
+
 </html>
